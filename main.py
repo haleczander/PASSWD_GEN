@@ -7,6 +7,8 @@ from charset import CharSet
 
 def passwd_gen( length, charsets ):
     min_length = len(charsets)
+    if min_length <= 0 :
+        raise ValueError("No charset used")
     if length < min_length:
         raise ValueError(f"Length must be greater than {min_length}")
     
