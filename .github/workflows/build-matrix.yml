@@ -1,0 +1,60 @@
+name: Build EXE for All Platforms
+
+on:
+  push:
+    branches:
+      - main
+      - '**cicd*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install PyInstaller
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+
+    - name: Build executable
+      run: |
+        pyinstaller --onefile main.py
+        mkdir -p release_assets
+        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          mv dist/main release_assets/passwd_gen-linux
+        elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+          mv dist/main release_assets/passwd_gen-macos
+        else
+          mv dist/main.exe release_assets/passwd_gen-windows.exe
+        fi
+      shell: bash
+
+    - name: Zip executables
+      run: |
+        cd release_assets
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          7z a passwd_gen-windows.zip passwd_gen-windows.exe
+        else
+          zip passwd_gen-${{ matrix.os }}.zip *passwd_gen-*
+      shell: bash
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: passwd_gen-${{ matrix.os }}
+        path: release_assets/*.zip

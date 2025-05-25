@@ -1,0 +1,88 @@
+name: Build & Publish Native Executables
+
+on:
+  push:
+    branches:
+      - main
+      - '**cicd*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux
+            ext: ''
+          - os: macos-latest
+            label: macos
+            ext: ''
+          - os: windows-latest
+            label: windows
+            ext: '.exe'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile main.py
+
+      - name: Rename binary for upload
+        run: |
+          mkdir -p release
+          mv dist/main release/passwd_gen-${{ matrix.label }}${{ matrix.ext }}
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-readme:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Update README.md with download links
+        run: |
+          cat > dl.md <<EOF
+          ## Téléchargements
+
+          - [Windows](https://github.com/${{ github.repository }}/releases/download/latest/passwd_gen-windows.exe)
+          - [macOS](https://github.com/${{ github.repository }}/releases/download/latest/passwd_gen-macos)
+          - [Linux](https://github.com/${{ github.repository }}/releases/download/latest/passwd_gen-linux)
+          EOF
+
+          grep -v "## Téléchargements" README.md | grep -v "releases/download" > README.tmp || true
+          cat dl.md >> README.tmp
+          mv README.tmp README.md
+
+      - name: Commit and push updated README
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add README.md
+          git commit -m "docs: update download links"
+          git push
